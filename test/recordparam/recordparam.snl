@@ -1,0 +1,26 @@
+program p
+    var record integer x; integer y,z; array [1..5] of integer a; end rec;
+        integer n;
+
+    procedure test(var record integer x; integer y,z; array [1..5] of integer a; end rec);
+        begin
+            rec.a[1] := rec.x;
+            rec.a[2] := rec.y;
+            rec.a[3] := rec.z
+        end
+
+begin
+    read(n);
+    rec.x := n;
+    read(n);
+    rec.y := n;
+    read(n);
+    rec.z := n;
+    test(rec);
+
+    n := 1;
+    while n < 4 do
+        write(rec.a[n]);
+        n := n + 1
+    endwh
+end

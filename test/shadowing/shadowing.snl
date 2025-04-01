@@ -1,0 +1,26 @@
+program p
+    var integer a;
+
+    procedure test1(integer a);
+        procedure test2();
+            var integer a;
+            begin
+                a := 222
+            end
+
+        procedure test3();
+            begin
+                a := 333
+            end
+        begin
+            test2();
+            write(a);
+            test3();
+            write(a)
+        end
+
+begin
+    a := 999;
+    test1(111);
+    write(a)
+end

@@ -1,0 +1,40 @@
+program p
+    var array [3..5] of integer nums;
+
+    procedure test1(var array [3..5] of integer arr);
+        begin
+            arr[3] := 1;
+            arr[4] := 2;
+            arr[5] := 3
+        end
+
+    procedure test2(array [3..5] of integer arr);
+        begin
+            arr[3] := 3;
+            arr[4] := 2;
+            arr[5] := 1
+        end
+
+    procedure test3(var array [3..5] of integer arr);
+        var array [3..5] of integer arr1;
+        begin
+            arr1[3] := 6;
+            arr1[4] := 7;
+            arr1[5] := 8;
+            arr := arr1
+        end
+
+begin
+    test1(nums);
+    write(nums[3]);
+    write(nums[4]);
+    write(nums[5]);
+    test2(nums);
+    write(nums[3]);
+    write(nums[4]);
+    write(nums[5]);
+    test3(nums);
+    write(nums[3]);
+    write(nums[4]);
+    write(nums[5])
+end

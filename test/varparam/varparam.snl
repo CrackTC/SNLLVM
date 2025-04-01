@@ -1,0 +1,19 @@
+program p
+    var integer i;
+
+    procedure double(var integer num);
+        begin
+            num := num * 2
+        end
+
+    procedure quad(var integer num);
+        begin
+            double(num);
+            double(num)
+        end
+
+begin
+    read(i);
+    quad(i);
+    write(i)
+end

@@ -1,0 +1,19 @@
+program p
+    var integer n;
+
+    procedure factory(integer n; var integer result);
+        begin
+            if n < 2
+            then
+                result := 1
+            else
+                factory(n - 1, result);
+                result := result * n
+            fi
+        end
+
+begin
+    read(n);
+    factory(n, n);
+    write(n)
+end
