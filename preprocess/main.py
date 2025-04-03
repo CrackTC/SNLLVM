@@ -26,19 +26,31 @@ if __name__ == "__main__":
     idx = 1
     if sys.argv[idx] == "lex":
         idx += 1
-        if lex(input, outputNames["lex"]) != 0:
+        try:
+            if lex(input, outputNames["lex"]) != 0:
+                print("Lexical analysis failed")
+                exit(-1)
+        except:
             print("Lexical analysis failed")
             exit(-1)
     if sys.argv[idx] == "parse":
         idx += 1
-        ll1 = LL1(gram_path, outputNames["lex"], outputNames["parse"])
-        ll1.run()
-        err, _ = ll1.showError(verbose=True)
-        if err != 0:
+        try:
+            ll1 = LL1(gram_path, outputNames["lex"], outputNames["parse"])
+            ll1.run()
+            err, _ = ll1.showError(verbose=True)
+            if err != 0:
+                print("Gramma analysis failed")
+                exit(-1)
+        except:
             print("Gramma analysis failed")
             exit(-1)
     if sys.argv[idx] == "semantic":
         idx += 1
-        if semantic(outputNames["parse"], outputNames["semantic"]) != 0:
+        try:
+            if semantic(outputNames["parse"], outputNames["semantic"]) != 0:
+                print("Semantic analysis failed")
+                exit(-1)
+        except:
             print("Semantic analysis failed")
             exit(-1)
