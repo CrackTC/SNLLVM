@@ -14,6 +14,14 @@ public abstract record class LLVMCodeGenVisitorResult
     public record class TypeResult(TypeInfo TypeInfo) : LLVMCodeGenVisitorResult;
 }
 
+public class SemanticException : Exception
+{
+    public SemanticException(int lineNum, string node, string message)
+        : base($"Semantic error at line {lineNum} in {node}: {message}")
+    {
+    }
+}
+
 public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LLVMCodeGenVisitorResult>
 {
     private LLVMTargetMachineRef _machine;
@@ -116,7 +124,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(TypeDeclNode node)
     {
         if (node.Type.Accept(this) is not LLVMCodeGenVisitorResult.TypeResult { TypeInfo: var type })
-            throw new Exception($"{nameof(TypeDeclNode)}: Could not get type");
+            throw new SemanticException(node.LineNum, nameof(TypeDeclNode), "Invalid type declaration");
         _typeTable.Add(node.Name, type);
         return new LLVMCodeGenVisitorResult.VoidResult();
     }
@@ -124,7 +132,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(ArrayTypeNode node)
     {
         if (node.ElementType.Accept(this) is not LLVMCodeGenVisitorResult.TypeResult { TypeInfo: var elemTypeInfo })
-            throw new Exception($"{nameof(ArrayTypeNode)}: Could not get element type");
+            throw new SemanticException(node.LineNum, nameof(ArrayTypeNode), "Invalid array declaration");
         var arrayType = LLVMTypeRef.CreateArray(elemTypeInfo.LLVMType, (uint)(node.High - node.Low + 1));
         return new LLVMCodeGenVisitorResult.TypeResult(new ArrayTypeInfo(arrayType, elemTypeInfo, node.Low));
     }
@@ -144,7 +152,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
         var fieldInfos = node.Fields.SelectMany(f =>
         {
             if (f.Type.Accept(this) is not LLVMCodeGenVisitorResult.TypeResult { TypeInfo: var fieldTypeInfo })
-                throw new Exception($"{nameof(RecordTypeNode)}: Could not get field type");
+                throw new SemanticException(f.LineNum, nameof(RecordTypeNode), "Invalid field type");
             return f.Ids.Select(id => new FieldInfo(id, fieldTypeInfo));
         }).ToList();
         var recordType = LLVMTypeRef.CreateStruct([.. fieldInfos.Select(ft => ft.TypeInfo.LLVMType)], Packed: false);
@@ -154,7 +162,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(TypeDefTypeNode node)
     {
         if (_typeTable[node.Identifier] is not (var type, _))
-            throw new Exception($"{nameof(TypeDefTypeNode)}: Could not find type {node.Identifier}");
+            throw new SemanticException(node.LineNum, nameof(TypeDefTypeNode), $"Unknown type {node.Identifier}");
         return new LLVMCodeGenVisitorResult.TypeResult(type);
     }
 
@@ -168,7 +176,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(VarDeclNode node)
     {
         if (node.Type.Accept(this) is not LLVMCodeGenVisitorResult.TypeResult { TypeInfo: var typeInfo })
-            throw new Exception($"{nameof(VarDeclNode)}: Could not get type");
+            throw new SemanticException(node.LineNum, nameof(VarDeclNode), $"Invalid var declaration");
         foreach (var id in node.Ids)
         {
             var alloca = _builder.BuildAlloca(typeInfo.LLVMType, id);
@@ -213,7 +221,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
         var paramInfos = node.Params.SelectMany(p =>
         {
             if (p.Type.Accept(this) is not LLVMCodeGenVisitorResult.TypeResult { TypeInfo: var typeInfo })
-                throw new Exception($"{nameof(ProcDeclNode)}: Could not get parameter type");
+                throw new SemanticException(p.LineNum, nameof(ProcDeclNode), "Invalid procedure parameter type");
             return p.Ids.Select(id => new ParamInfo(id, typeInfo, p.ByRef));
         }).ToList();
 
@@ -266,7 +274,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     {
         var procInfo = _varTable.CurrentScope.Extra;
         var index = procInfo.ParamInfos.FindIndex(pi => pi.Name == node.Ids[0]);
-        if (index == -1) throw new Exception($"{nameof(ParamDeclNode)}: Could not find parameter {node.Ids[0]}");
+        if (index == -1) throw new SemanticException(node.LineNum, nameof(ParamDeclNode), $"Unknown parameter name: {node.Ids[0]}");
 
         for (int i = 0; i < node.Ids.Length; ++i)
         {
@@ -299,12 +307,12 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(AssignStatementNode node)
     {
         if (node.Right.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var rhs, TypeInfo: var ti, IsLValue: var loadRHS })
-            throw new Exception($"{nameof(AssignStatementNode)}: Could not get rhs");
+            throw new SemanticException(node.LineNum, nameof(AssignStatementNode), "Invalid assignment rhs");
 
         if (loadRHS) rhs = _builder.BuildLoad2(ti.LLVMType, rhs);
 
         if (node.Left.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var lhs, IsLValue: true })
-            throw new Exception($"{nameof(AssignStatementNode)}: Could not get lhs");
+            throw new SemanticException(node.LineNum, nameof(AssignStatementNode), "Invalid assignment lhs");
 
         _builder.BuildStore(rhs, lhs);
         return new LLVMCodeGenVisitorResult.VoidResult();
@@ -313,7 +321,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(WriteStatementNode node)
     {
         if (node.Expression.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var value, TypeInfo: var ti, IsLValue: var loadValue })
-            throw new Exception($"{nameof(WriteStatementNode)}: Could not get value");
+            throw new SemanticException(node.LineNum, nameof(WriteStatementNode), "Invalid write expression");
 
         if (loadValue) value = _builder.BuildLoad2(ti.LLVMType, value);
 
@@ -343,7 +351,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
         }
         else
         {
-            throw new Exception($"{nameof(WriteStatementNode)}: Unsupported type");
+            throw new SemanticException(node.LineNum, nameof(WriteStatementNode), "Unsupported write type, should be char or integer");
         }
 
         return new LLVMCodeGenVisitorResult.VoidResult();
@@ -352,7 +360,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(ReadStatementNode node)
     {
         if (node.Variable.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var alloca, TypeInfo: var ti, IsLValue: true })
-            throw new Exception($"{nameof(ReadStatementNode)}: Could not get variable");
+            throw new SemanticException(node.LineNum, nameof(ReadStatementNode), "Invalid read variable");
 
         if (ti is CharTypeInfo) // char
         {
@@ -382,7 +390,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
         }
         else
         {
-            throw new Exception($"{nameof(ReadStatementNode)}: Unsupported type");
+            throw new SemanticException(node.LineNum, nameof(ReadStatementNode), "Unsupported read type, should be char or integer");
         }
 
         return new LLVMCodeGenVisitorResult.VoidResult();
@@ -397,7 +405,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
         var ifCounter = _ifCounter++;
 
         if (node.Condition.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var condition, IsLValue: var loadCondition })
-            throw new Exception($"{nameof(IfStatementNode)}: Could not get condition");
+            throw new SemanticException(node.LineNum, nameof(IfStatementNode), "Invalid if condition");
 
         if (loadCondition) condition = _builder.BuildLoad2(condition.TypeOf.ElementType, condition, $"if_cond_{ifCounter}");
 
@@ -427,7 +435,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(CallStatementNode node)
     {
         if (_procTable[node.Name] is not (var calleeInfo, _))
-            throw new Exception($"{nameof(CallStatementNode)}: Could not find procedure {node.Name}");
+            throw new SemanticException(node.LineNum, nameof(CallStatementNode), $"Unknown procedure {node.Name}");
 
         var (curProcInfo, _) = _varTable.CurrentScope;
         var calleeClosureTypeInfo = calleeInfo.ClosureTypeInfo;
@@ -454,7 +462,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
             {
                 var fi = calleeClosureTypeInfo.FieldInfos[i];
                 if (_varTable[fi.Name] is not (var varInfo, var procInfo))
-                    throw new Exception($"{nameof(CallStatementNode)}: Could not find variable {fi.Name}");
+                    throw new Exception($"{nameof(CallStatementNode)}: Could not find closure variable {fi.Name}");
 
                 // how
                 if (procInfo != curProcInfo)
@@ -488,7 +496,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
             var (argExpr, paramInfo) = pair;
 
             if (argExpr.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var arg, TypeInfo: var ti, IsLValue: var isLValue })
-                throw new Exception($"{nameof(CallStatementNode)}: Could not get argument");
+                throw new SemanticException(argExpr.LineNum, nameof(CallStatementNode), $"Invalid argument expression for {paramInfo.Name}");
 
             if (!paramInfo.ByRef && isLValue)
                 arg = _builder.BuildLoad2(ti.LLVMType, arg);
@@ -511,7 +519,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
 
         _builder.PositionAtEnd(condBlock);
         if (node.Condition.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var cond, TypeInfo: var condTypeInfo, IsLValue: var loadCondition })
-            throw new Exception($"{nameof(WhileStatementNode)}: Could not get condition");
+            throw new SemanticException(node.Condition.LineNum, nameof(WhileStatementNode), "Invalid while condition");
         if (loadCondition) cond = _builder.BuildLoad2(condTypeInfo.LLVMType, cond, $"while_cond_val_{whileCounter}");
 
         var bodyBlock = LLVMBasicBlockRef.CreateInContext(_module.Context, $"while_body_{whileCounter}");
@@ -532,10 +540,10 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(ArrayMemberExpressionNode node)
     {
         if (node.Array.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var array, TypeInfo: ArrayTypeInfo ti, IsLValue: true })
-            throw new Exception($"{nameof(ArrayMemberExpressionNode)}: Could not get array");
+            throw new SemanticException(node.Array.LineNum, nameof(ArrayMemberExpressionNode), "Invalid array expression");
 
         if (node.Index.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var index, TypeInfo: IntegerTypeInfo, IsLValue: var loadIndex })
-            throw new Exception($"{nameof(ArrayMemberExpressionNode)}: Could not get index");
+            throw new SemanticException(node.Index.LineNum, nameof(ArrayMemberExpressionNode), "Invalid array index expression");
 
         if (loadIndex) index = _builder.BuildLoad2(LLVMTypeRef.Int32, index, "arr_idx");
 
@@ -547,10 +555,10 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(RecordMemberExpressionNode node)
     {
         if (node.Record.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var record, TypeInfo: RecordTypeInfo ti, IsLValue: true })
-            throw new Exception($"{nameof(RecordMemberExpressionNode)}: Could not get record");
+            throw new SemanticException(node.Record.LineNum, nameof(RecordMemberExpressionNode), "Invalid record expression");
 
         if (ti.FieldInfos.FindIndex(f => f.Name == node.Member.Name) is var index && index < 0)
-            throw new Exception($"{nameof(RecordMemberExpressionNode)}: Could not find field {node.Member.Name}");
+            throw new SemanticException(node.Member.LineNum, nameof(RecordMemberExpressionNode), $"Unknown record member {node.Member.Name}");
 
         var fieldInfo = ti.FieldInfos[index];
         var fieldPtr = _builder.BuildGEP2(ti.LLVMType, record, [LLVMValueRef.CreateConstInt(LLVMTypeRef.Int32, 0), LLVMValueRef.CreateConstInt(LLVMTypeRef.Int32, (uint)index)]);
@@ -560,12 +568,12 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(BinaryExpressionNode node)
     {
         if (node.Left.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var lhs, TypeInfo: var lhsTypeInfo, IsLValue: var loadLHS })
-            throw new Exception($"{nameof(BinaryExpressionNode)}: Could not get lhs");
+            throw new SemanticException(node.Left.LineNum, nameof(BinaryExpressionNode), "Invalid binary expression lhs");
 
         if (loadLHS) lhs = _builder.BuildLoad2(lhsTypeInfo.LLVMType, lhs);
 
         if (node.Right.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var rhs, TypeInfo: var rhsTypeInfo, IsLValue: var loadRHS })
-            throw new Exception($"{nameof(BinaryExpressionNode)}: Could not get rhs");
+            throw new SemanticException(node.Right.LineNum, nameof(BinaryExpressionNode), "Invalid binary expression rhs");
 
         if (loadRHS) rhs = _builder.BuildLoad2(rhsTypeInfo.LLVMType, rhs);
 
@@ -575,7 +583,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
             Operator.Sub => _builder.BuildSub(lhs, rhs),
             Operator.Mul => _builder.BuildMul(lhs, rhs),
             Operator.Lt => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSLT, lhs, rhs),
-            _ => throw new Exception($"{nameof(BinaryExpressionNode)}: Unsupported operator {node.Operator}")
+            _ => throw new SemanticException(node.LineNum, nameof(BinaryExpressionNode), $"Unsupported operator {node.Operator}")
         };
 
         return new LLVMCodeGenVisitorResult.ValueResult(result, node.Operator switch
@@ -584,7 +592,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
             Operator.Sub => lhsTypeInfo,
             Operator.Mul => lhsTypeInfo,
             Operator.Lt => new BooleanTypeInfo(),
-            _ => throw new Exception($"{nameof(BinaryExpressionNode)}: Unsupported operator {node.Operator}")
+            _ => throw new SemanticException(node.LineNum, nameof(BinaryExpressionNode), $"Unsupported operator {node.Operator}")
         }, IsLValue: false);
     }
 
@@ -609,7 +617,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
     public LLVMCodeGenVisitorResult Visit(IdentifierExpressionNode node)
     {
         if (_varTable[node.Name] is not (VarInfo varInfo, ProcInfo procInfo))
-            throw new Exception($"{nameof(IdentifierExpressionNode)}: Could not find variable {node.Name}");
+            throw new SemanticException(node.LineNum, nameof(IdentifierExpressionNode), $"Could not find variable {node.Name}");
 
         var curProcInfo = _varTable.CurrentScope.Extra;
 
@@ -633,7 +641,7 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
         }
 
         var varIndex = closureTypeInfo.FieldInfos.FindIndex(f => f.Name == node.Name);
-        if (varIndex < 0) throw new Exception($"{nameof(IdentifierExpressionNode)}: Could not find variable {node.Name}");
+        if (varIndex < 0) throw new SemanticException(node.LineNum, nameof(IdentifierExpressionNode), $"Could not find variable {node.Name}");
 
         var varPtrGEP = _builder.BuildGEP2(closureTypeInfo.LLVMType, closurePtr, [LLVMValueRef.CreateConstInt(LLVMTypeRef.Int32, 0), LLVMValueRef.CreateConstInt(LLVMTypeRef.Int32, (uint)varIndex)]);
         var varPtr = _builder.BuildLoad2(LLVMTypeRef.CreatePointer(closureTypeInfo.FieldInfos[varIndex].TypeInfo.LLVMType, 0), varPtrGEP);

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Reflection;
 using Sorac.SNL;
 using Sorac.SNL.AST;
@@ -223,7 +223,16 @@ var filenameNoExtension = Path.GetFileNameWithoutExtension(args[0]);
 
 var target = "mips";
 var visitor = new LLVMCodeGenVisitor(target);
-visitor.Visit(program);
+try
+{
+    visitor.Visit(program);
+}
+catch (SemanticException e)
+{
+    Console.WriteLine(e.Message);
+    Environment.Exit(-1);
+}
+
 visitor.EmitToFile($"{filenameNoExtension}.ll");
 Process.Start("opt", $"-S -O3 {filenameNoExtension}.ll -o {filenameNoExtension}.opt.ll").WaitForExit();
 Process.Start("llc", $"-O3 {filenameNoExtension}.opt.ll -o {filenameNoExtension}.s").WaitForExit();
