@@ -306,13 +306,16 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
 
     public LLVMCodeGenVisitorResult Visit(AssignStatementNode node)
     {
-        if (node.Right.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var rhs, TypeInfo: var ti, IsLValue: var loadRHS })
+        if (node.Right.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var rhs, TypeInfo: var rti, IsLValue: var loadRHS })
             throw new SemanticException(node.LineNum, nameof(AssignStatementNode), "Invalid assignment rhs");
 
-        if (loadRHS) rhs = _builder.BuildLoad2(ti.LLVMType, rhs);
+        if (loadRHS) rhs = _builder.BuildLoad2(rti.LLVMType, rhs);
 
-        if (node.Left.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var lhs, IsLValue: true })
+        if (node.Left.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var lhs, TypeInfo: var lti, IsLValue: true })
             throw new SemanticException(node.LineNum, nameof(AssignStatementNode), "Invalid assignment lhs");
+
+        if (rti.LLVMType != lti.LLVMType)
+            throw new SemanticException(node.LineNum, nameof(AssignStatementNode), $"Assignment type mismatch, {lti.LLVMType} != {rti.LLVMType}");
 
         _builder.BuildStore(rhs, lhs);
         return new LLVMCodeGenVisitorResult.VoidResult();
