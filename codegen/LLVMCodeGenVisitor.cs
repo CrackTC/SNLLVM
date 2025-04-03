@@ -498,6 +498,12 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
             if (argExpr.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var arg, TypeInfo: var ti, IsLValue: var isLValue })
                 throw new SemanticException(argExpr.LineNum, nameof(CallStatementNode), $"Invalid argument expression for {paramInfo.Name}");
 
+            if (ti.LLVMType != paramInfo.TypeInfo.LLVMType)
+                throw new SemanticException(argExpr.LineNum, nameof(CallStatementNode), $"Argument type mismatch for {paramInfo.Name}");
+
+            if (paramInfo.ByRef && !isLValue)
+                throw new SemanticException(argExpr.LineNum, nameof(CallStatementNode), $"Argument {paramInfo.Name} must be an lvalue");
+
             if (!paramInfo.ByRef && isLValue)
                 arg = _builder.BuildLoad2(ti.LLVMType, arg);
 
