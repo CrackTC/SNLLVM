@@ -12,7 +12,10 @@
       in
       {
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [ llvm ];
+          buildInputs = with pkgs; [
+            llvm
+            mars-mips
+          ];
         };
       }
     );
