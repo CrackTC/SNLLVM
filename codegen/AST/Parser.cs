@@ -289,6 +289,9 @@ public static class Parser
                     throw new Exception("Invalid write expression");
                 statement = new WriteStatementNode(lineNum, writeExpression);
                 return true;
+            case "ReturnK":
+                statement = new ReturnStatementNode(lineNum);
+                return true;
             default:
                 throw new NotImplementedException();
         }

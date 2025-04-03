@@ -25,6 +25,7 @@ public interface IProgramVisitor<TVisitResult>
     TVisitResult Visit(IfStatementNode node);
     TVisitResult Visit(CallStatementNode node);
     TVisitResult Visit(WhileStatementNode node);
+    TVisitResult Visit(ReturnStatementNode node);
     TVisitResult Visit(ArrayMemberExpressionNode node);
     TVisitResult Visit(RecordMemberExpressionNode node);
     TVisitResult Visit(BinaryExpressionNode node);

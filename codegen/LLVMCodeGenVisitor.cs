@@ -537,6 +537,15 @@ public unsafe class LLVMCodeGenVisitor(string targetTriple) : IProgramVisitor<LL
         return new LLVMCodeGenVisitorResult.VoidResult();
     }
 
+    public LLVMCodeGenVisitorResult Visit(ReturnStatementNode node)
+    {
+        var proc = _builder.InsertBlock.Parent;
+        _builder.BuildRetVoid();
+        var retContBlock = proc.AppendBasicBlock("return_cont");
+        _builder.PositionAtEnd(retContBlock);
+        return new LLVMCodeGenVisitorResult.VoidResult();
+    }
+
     public LLVMCodeGenVisitorResult Visit(ArrayMemberExpressionNode node)
     {
         if (node.Array.Accept(this) is not LLVMCodeGenVisitorResult.ValueResult { Value: var array, TypeInfo: ArrayTypeInfo ti, IsLValue: true })
