@@ -2,6 +2,7 @@ program p
     var integer a;
 
     procedure test1(integer a);
+        var integer b;
         procedure test2();
             var integer a;
             begin
@@ -20,7 +21,7 @@ program p
         end
 
 begin
-    a := 999;
+    read(a);
     test1(111);
     write(a)
 end

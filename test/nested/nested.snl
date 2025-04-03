@@ -1,0 +1,31 @@
+program p
+    var integer n;
+
+    procedure p(integer x; var integer y);
+        var integer sum;
+        procedure q(var integer x);
+            var integer a;
+            procedure r();
+                begin
+                    x := x - 1;
+                    q(x)
+                end
+            begin
+                if x < 1 then
+                    return
+                else
+                    sum := sum + x;
+                    r()
+                fi
+            end
+        begin
+            sum := 0;
+            q(x);
+            y := sum
+        end
+
+begin
+    read(n);
+    p(n, n);
+    write(n)
+end

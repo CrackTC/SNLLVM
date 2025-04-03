@@ -1,0 +1,11 @@
+program p
+    var integer n;
+
+    procedure sgn(var integer x);
+        begin
+            x := 2
+        end
+
+begin
+    sgn(1)
+end
